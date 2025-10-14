@@ -1,0 +1,197 @@
+
+
+grammar Literaciones;
+
+
+// Agregamos los paquetes necesarios para la tabla de simbolos al parser   
+@header {
+    package com.ittepic.literaciones;
+    
+    import java.util.Map;
+    import java.util.HashMap;
+    import java.util.List;
+    import java.util.ArrayList;  
+}
+
+// Insertar codigo en la parte de atributos del lexer
+@lexer::members {
+    public List<String> listaErrores = new ArrayList<>();
+}
+
+// Insertar codigo en la parte de atributos del parser
+@parser::members {
+    public Map<String, Object> tablaSimbolos = new HashMap<String, Object>();
+    public List<String> listaErrores = new ArrayList<>();
+}
+
+
+// --------- REGLAS DEL PARSER (estructura) ---------
+programa : INICIO sentencia* FINAL EOF ;
+
+sentencia :     declaracion         #declara
+            |   asignacion          #asig
+            |   imprimir            #show
+            |   condicion           #cond
+            |   ciclo               #cic
+            |   repeat              #rep
+            ;
+
+// REGLAS CORREGIDAS Y LIMPIAS
+declaracion : 
+        DECLARA ID { 
+                if (tablaSimbolos.containsKey($ID.text)) {
+                    listaErrores.add(
+                        "Error semántico en linea " + $ID.getLine() + ":" + $ID.getCharPositionInLine() +
+                        ": la variable '" + $ID.text + "' ya fue declarada."
+                    );
+                } else {
+                    tablaSimbolos.put($ID.text, null); 
+                }
+        }#crear 
+        | DECLARA ID ASIGNA expr   { 
+                if (tablaSimbolos.containsKey($ID.text)) {
+                    listaErrores.add(
+                        "Error semántico en linea " + $ID.getLine() + ":" + $ID.getCharPositionInLine() +
+                        ": la variable '" + $ID.text + "' ya fue declarada."
+                    );
+                } else {
+                    tablaSimbolos.put($ID.text, $expr.value); 
+                }
+        } #crea_asigna
+            ;
+
+asignacion : ID ASIGNA expr { 
+        if (!tablaSimbolos.containsKey($ID.text)) {
+            listaErrores.add(
+                "Error semántico en línea " + $ID.getLine() + 
+                ", columna " + $ID.getCharPositionInLine() +
+                ": la variable '" + $ID.text + "' no ha sido declarada."
+            );
+        } else {
+            tablaSimbolos.put($ID.text, $expr.value); 
+        }
+      } #asignar
+    ;
+
+imprimir : PRINT expr     #imp
+           ;
+
+condicion :  IF expr THEN sentencia* FIN (ELSE sentencia* FIN)*    #if_else
+          ;
+
+ciclo : WHILE expr THEN sentencia* FIN #while
+      ;
+      
+repeat : FOR valor THEN sentencia* FIN   #for_simple
+       ;
+
+valor:
+      NUMERO    #num
+    | ID        #ident
+    ;
+
+// =============================
+// ======= EXPRESIONES =======
+// =============================
+
+// Expresión principal (nivel más alto)
+expr returns [Object value]
+    : expr_or { $value = $expr_or.value; }
+    ;
+
+// Operadores lógicos (AND, OR)
+expr_or returns [Object value]
+    : a=expr_comp (op=(AND | OR) b=expr_comp)* {
+        $value = $a.value;
+    } #exprLogica
+    ;
+
+// Comparaciones (=, <, >, etc.)
+expr_comp returns [Object value]
+    : a=expr_arit (op=(IGUAL_QUE | MAYOR | MENOR) b=expr_arit)* {
+        $value = $a.value;
+    } #exprComparacion
+    ;
+
+// Suma y resta
+expr_arit returns [Object value]
+    : a=expr_term (op=(SUMA | RESTA) b=expr_term)* {
+        $value = $a.value;
+    } #exprArit
+    ;
+
+// Multiplicación y división
+expr_term returns [Object value]
+    : a=term (op=(MULT | DIV) b=term)* {
+        $value = $a.value;
+    } #exprTerm
+    ;
+
+// =============================
+// ======= FACTORES ==========
+// =============================
+term returns [Object value]
+    : '(' e=expr ')'           { $value = $e.value; }           #agrup
+    | NOT e=expr                 { $value = !((Boolean)$e.value); }               #negacion
+    | NUMERO                   { $value = Integer.parseInt($NUMERO.text); }   #entero
+    | NUMERO_DEC               { $value = Double.parseDouble($NUMERO_DEC.text); } #decimal
+    | CADENA                   { $value = $CADENA.text; }       #cad
+    | VERDADERO                { $value = true; }               #bool_true
+    | FALSO                    { $value = false; }              #bool_false
+    | ID              { $value = tablaSimbolos.get($ID.text); } #ide
+    ;
+
+
+
+
+// --------- REGLAS DEL LÉXICO (tokens básicos) ---------
+// (El resto de tu archivo es correcto, lo incluyo para que tengas todo completo)
+INICIO      : 'INICIO' | 'COMIENZO' | 'PROLOGO' | 'APERTURA' ;
+FINAL       : 'FINAL'  | 'EPILOGO' | 'CIERRE' ;
+
+IF          : 'SI'     | 'CONDICION' | 'CUMPLE' | 'REQUISITO' ;
+ELSE        : 'SINO'   | 'CAMBIO' | 'FALLA' ;
+WHILE       : 'MIENTRAS' | 'HASTA' ;
+THEN        : '(' | 'HACER' | 'ENTONCES' ;
+FOR         : 'REPETIR' | 'CICLO' | 'BUCLE' ;
+FIN         : ')' | 'FIN' ;
+
+PRINT       : 'MOSTRAR' | 'MUESTRA' | 'ENSEÑA' | 'DICE' | 'DECIR' | 'IMPRIME' | 'IMPRIMIR' ;
+ASIGNA      : 'IGUAL' | 'VALOR' | 'ASIGNA' | 'ASIGNAR' | 'DE' | 'COMO' | 'OBTIENE' | 'TOMA' | 'ADOPTA' | 'VUELVE' | 'TRANSFORMA' | 'ES' | '=' ;
+DECLARA     : 'DECLARA' | 'DECLARAR' | 'CREA' | 'CREAR' | 'EXISTE' | 'NACE' | 'SURGE' | 'INTRODUCE' | 'PRESENTA' ;
+
+SUMA        : 'SUMA'| 'MAS' | 'AÑADE' | 'JUNTA' | '+';
+RESTA       : 'RESTA' | 'QUITA' | 'REDUCE' | 'MENOS' | '-';
+MULT        : 'MULTIPLICA' | 'POR' | 'CRECE' | '*' ;
+DIV         : 'ENTRE' | 'REPARTE' | 'SEPARA' | '/';
+
+AND         : 'Y' | 'ADEMAS' | 'TAMBIEN' | '$' ;
+OR          : 'O' | '|';
+NOT         : 'NO' | 'NEGAR' | '!' ;
+
+IGUAL_QUE   : 'COINCIDE' | 'EQUIVALE' | 'MISMO' | 'IGUAL_QUE' | '==' ;
+MAYOR       : 'MAYOR' | 'SOBREPASA' | 'ARRIBA' | 'SUPERIOR' | '>';
+MENOR       : 'MENOR' | 'INFERIOR' | 'DEBAJO' | '<';
+
+VERDADERO   : 'VERDADERO' | 'CIERTO' | 'REAL' | 'POSIBLE' ;
+FALSO       : 'FALSO' | 'IMPOSIBLE' | 'IRREAL' ;
+
+NUMERO : [0-9]+ ;
+NUMERO_DEC : [0-9]+ ('.' [0-9]+)? ;
+CADENA : '"' (~["\r\n])* '"' ;
+ID : [A-Z][a-z0-9]* ;
+
+COMPLEMENTO : [a-z]+ -> skip;
+WS  : [ \t\r\n]+ -> skip ;
+LINE_COMMENT : '//' ~[\r\n]* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+
+ELEMENTO_INVALIDO : [A-Z][A-Z]+[a-z0-9]*{
+    listaErrores.add("Error léxico: Elemento invalido '" + getText() + "' en linea " + getLine() + ":" + getCharPositionInLine());
+    System.out.println("Error lexico: reservada no existe '" + getText() + "' en linea " + getLine() + ":" + getCharPositionInLine());
+}
+;
+
+ERROR : . {
+    listaErrores.add("Error lexico: caracter inválido '" + getText() + "' en linea " + getLine() + ":" + getCharPositionInLine());
+};

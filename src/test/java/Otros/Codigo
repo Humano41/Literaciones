@@ -1,0 +1,64 @@
+        // --------------- ANALISIS SEMANTICO ---------------------------
+        if (jtacompile.getText().isEmpty()) { // Solo si no hay errores sintácticos
+            System.out.println("Iniciando analisis semantico...");
+
+            // 1. Crear una nueva tabla de símbolos
+            this.tablaSimbolos = new TablaSimbolos();
+
+            // 2. Crear el listener y pasarle la tabla
+            MiListenerSemantico semantico = new MiListenerSemantico(this.tablaSimbolos);
+
+            // 3. Crear el walker que recorrerá el árbol
+            ParseTreeWalker walker = new ParseTreeWalker();
+
+            // 4. Iniciar el recorrido.
+            walker.walk(semantico, arbol);
+
+            // 5. Imprimir la tabla en la consola para depurar
+            tablaSimbolos.imprimir();
+
+            mostrarTablaSimbolos();
+
+            // --- LÓGICA PARA MOSTRAR ERRORES ---
+            List<String> errores = semantico.getErroresSemanticos();
+            if (errores.isEmpty()) {
+                // No hay errores semánticos
+                jtpSeman.setText("Análisis semántico completado sin errores.");
+                jtacompile.append("\nCompilación terminada sin errores sintácticos ni semánticos.");
+            } else {
+                // Hay errores, los mostramos
+                StringBuilder sb = new StringBuilder();
+                sb.append("Se encontraron los siguientes errores semánticos:\n\n");
+                for (String error : errores) {
+                    sb.append(error).append("\n");
+                }
+                jtpSeman.setText(sb.toString());
+                jtacompile.append("\nCompilación fallida debido a errores semánticos.");
+            }
+
+        } else {
+            // Si hay errores sintácticos, no tiene caso correr el análisis semántico
+            jtpSeman.setText("No se pudo realizar el análisis semántico debido a errores de sintaxis.");
+        }
+
+
+//DENTRO DEL TEXTFIELD
+        // TODO add your handling code here:
+        int keyCode = evt.getKeyCode();
+        // Esta condición tan larga está verificando si la tecla presionada es una letra,
+        // un número o una tecla de función especial.
+        if ((keyCode >= 65 && keyCode <= 90) // A-Z (mayúsculas)
+            || (keyCode >= 48 && keyCode <= 57) // 0-9 (números)
+            || (keyCode >= 97 && keyCode <= 122) // a-z (minúsculas)
+            || (keyCode != 27 && !(keyCode >= 37
+                && keyCode <= 40) && !(keyCode >= 16
+                && keyCode <= 18) && keyCode != 524
+            && keyCode != 20)) {
+
+        // Si el título de la ventana NO contiene un asterisco...
+        if (!getTitle().contains("*")) {
+            // ...le añade un asterisco al final.
+            setTitle(getTitle() + "*");
+        }
+        }
+
