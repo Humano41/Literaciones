@@ -166,45 +166,87 @@ condicion
  * Regla para el ciclo WHILE.
  * Genera código 3DC para lazo utilizando etiquetas y saltos para la reevaluación.
  */
-ciclo returns [String L_inicio, String L_fin]
-    : WHILE e=expr THEN
-        {
-            // 1. DECLARACIÓN E INICIALIZACIÓN ÚNICA de cg (CodeGenerator cg = ...)
-            CodeGenerator cg = CodeGenerator.getInstance();
-            
-            // 2. Crear etiquetas. (Ahora son atributos de retorno $L_inicio y $L_fin)
-            $L_inicio = cg.newLabel();
-            String L_cuerpo = cg.newLabel(); 
-            $L_fin = cg.newLabel();
-            
-            // 3. 1️⃣ Etiqueta de inicio del bucle (L0:)
-            cg.emit(new Instruction3DC("LABEL", $L_inicio, null));
-            
-            // 4. 2️⃣ IF $e.tempName GOTO L_cuerpo (L1)
-            cg.emit(new Instruction3DC("IF_GOTO", null, $e.tempName, L_cuerpo));
-
-            // 5. 3️⃣ Salto al fin si es FALSO (GOTO L2)
-            cg.emit(new Instruction3DC("GOTO", $L_fin));
-
-            // 6. 4️⃣ Etiqueta de inicio del cuerpo (L1:)
-            cg.emit(new Instruction3DC("LABEL", L_cuerpo, null));
-        }
-        sentencias // <-- Cuerpo del ciclo
-        FIN
-        {
-            
-            // --- [B] DESPUÉS DEL CUERPO ---
-            // 8. 6️⃣ GOTO L_inicio (Volver a evaluar la condición)
-            cg.emit(new Instruction3DC("GOTO", $L_inicio)); 
-            
-            // 9. 7️⃣ Etiqueta de fin del bucle (L2:)
-            cg.emit(new Instruction3DC("LABEL", $L_fin, null));
-        }
+ciclo 
+locals [String L_inicio, String L_cuerpo, String L_fin]
+    : WHILE 
+    {
+        CodeGenerator cg = CodeGenerator.getInstance();
+        // 1. Crear etiquetas
+        $L_inicio = cg.newLabel();
+        $L_cuerpo = cg.newLabel();
+        $L_fin = cg.newLabel();
+        
+        // 2. IMPORTANTE: Emitir la etiqueta de INICIO *antes* de la expresión
+        cg.emit(new Instruction3DC("LABEL", $L_inicio, null));
+    }
+    e=expr THEN
+    {
+        // 3. Evaluar la condición (que acaba de generarse en e=expr)
+        cg.emit(new Instruction3DC("IF_GOTO", null, $e.tempName, $L_cuerpo));
+        
+        // 4. Salida si falso
+        cg.emit(new Instruction3DC("GOTO", $L_fin));
+        
+        // 5. Etiqueta del cuerpo
+        cg.emit(new Instruction3DC("LABEL", $L_cuerpo, null));
+    }
+    sentencias
+    FIN
+    {
+        // 6. Volver a evaluar (GOTO Inicio)
+        cg.emit(new Instruction3DC("GOTO", $L_inicio));
+        
+        // 7. Etiqueta de Fin
+        cg.emit(new Instruction3DC("LABEL", $L_fin, null));
+    }
     #while
-;
+    ;
 
       
-repeat : FOR valor THEN sentencias FIN    #for_simple
+repeat : FOR valor THEN 
+    {
+        CodeGenerator cg = CodeGenerator.getInstance(); // <--- SE DECLARA AQUÍ (1ra vez)
+        
+        // 1. Generar etiquetas y temporales
+        String t_contador = cg.newTemp(); 
+        String L_inicio = cg.newLabel(); 
+        String L_cuerpo = cg.newLabel();
+        String L_fin = cg.newLabel();
+
+        // 2. CAPTURA DE VALOR (Snapshot)
+        cg.emit(new Instruction3DC("ASSIGN", t_contador, $valor.tempName));
+
+        // 3. ETIQUETA INICIO
+        cg.emit(new Instruction3DC("LABEL", L_inicio, null));
+
+        // 4. CONDICIÓN: ¿t_contador > 0?
+        String t_cond = cg.newTemp();
+        cg.emit(new Instruction3DC("MAYOR", t_cond, t_contador, "0"));
+
+        // 5. SI (t_contador > 0) GOTO Cuerpo, SINO GOTO Fin
+        cg.emit(new Instruction3DC("IF_GOTO", null, t_cond, L_cuerpo));
+        cg.emit(new Instruction3DC("GOTO", L_fin));
+
+        // 6. ETIQUETA CUERPO
+        cg.emit(new Instruction3DC("LABEL", L_cuerpo, null));
+    }
+    sentencias 
+    FIN 
+    {
+        // ---> AQUÍ ELIMINAMOS "CodeGenerator cg = ..."; YA EXISTE LA VARIABLE cg
+        
+        // 7. DECREMENTO: t_contador = t_contador - 1
+        String t_next = cg.newTemp();
+        cg.emit(new Instruction3DC("RESTA", t_next, t_contador, "1"));
+        cg.emit(new Instruction3DC("ASSIGN", t_contador, t_next));
+
+        // 8. VOLVER A EVALUAR
+        cg.emit(new Instruction3DC("GOTO", L_inicio));
+
+        // 9. ETIQUETA FIN
+        cg.emit(new Instruction3DC("LABEL", L_fin, null));
+    } 
+    #for_simple
     ;
 
 valor returns [String tempName, Object value]: // Devuelve el nombre del temporal/ID

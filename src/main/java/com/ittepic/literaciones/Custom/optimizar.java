@@ -1,169 +1,390 @@
-// Archivo: com/ittepic/literaciones/Custom/Optimizador.java
 package com.ittepic.literaciones.Custom;
-
-import com.ittepic.literaciones.Custom.Instruction3DC;
-import com.ittepic.literaciones.Custom.HelperParser;
-import com.ittepic.literaciones.Custom.Simbolo;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class optimizar {
-public List<Instruction3DC> optimizar(List<Instruction3DC> codigoOriginal) {
-        System.out.println("--- INICIANDO OPTIMIZACIÓN ---");
-        
-        // PASO 1: Plegado y Propagación de Constantes
-        List<Instruction3DC> codigoPlegado = plegarConstantes(codigoOriginal);
-        
-        // PASO 2: Eliminación de Código Muerto (NUEVO)
-        // Ejecutamos esto en un ciclo porque eliminar una línea puede volver inútil a la anterior.
-        List<Instruction3DC> codigoLimpio = codigoPlegado;
+
+    public List<Instruction3DC> optimizar(List<Instruction3DC> codigoOriginal) {
+        System.out.println("--- INICIANDO OPTIMIZACIÓN AVANZADA ---");
+
+        List<Instruction3DC> codigo = new ArrayList<>(codigoOriginal);
         boolean huboCambios;
+        int ciclo = 1;
+
         do {
-            int tamanoAntes = codigoLimpio.size();
-            codigoLimpio = eliminarCodigoMuerto(codigoLimpio);
-            huboCambios = codigoLimpio.size() < tamanoAntes;
-            if(huboCambios) System.out.println("   -> Ciclo de limpieza: se eliminaron instrucciones.");
+            String hashAntes = codigo.toString(); // Detección simple de cambios
+
+            // 1. Plegado de Constantes y Simplificación Algebraica
+            codigo = plegarConstantesYAlgebra(codigo);
+
+            // 2. Propagación de Copias
+            codigo = propagacionCopias(codigo);
+
+            // 3. Eliminación de Subexpresiones Comunes
+            codigo = eliminarSubexpresiones(codigo);
+
+            // 4. Eliminación de Código Inalcanzable (Control de flujo)
+            codigo = eliminarInalcanzable(codigo);
+
+            // 5. Eliminación de Código Muerto (Variables no usadas)
+            codigo = eliminarCodigoMuerto(codigo);
+
+            String hashDespues = codigo.toString();
+            huboCambios = !hashAntes.equals(hashDespues);
+
+            if (huboCambios) {
+                System.out.println("   -> Ciclo " + ciclo + ": Se aplicaron optimizaciones.");
+            }
+            ciclo++;
         } while (huboCambios);
-        
+
         System.out.println("--- OPTIMIZACIÓN TERMINADA ---");
-        return codigoLimpio;
+        return codigo;
     }
-    
+
     // -------------------------------------------------------
-    // PASO 1: PLEGADO DE CONSTANTES (Tu código actual corregido)
+    // 1. PLEGADO DE CONSTANTES Y ÁLGEBRA
     // -------------------------------------------------------
-    private List<Instruction3DC> plegarConstantes(List<Instruction3DC> codigo) {
-        List<Instruction3DC> codigoOptimizado = new ArrayList<>();
+    private List<Instruction3DC> plegarConstantesYAlgebra(List<Instruction3DC> codigo) {
+        List<Instruction3DC> opt = new ArrayList<>();
         Map<String, Object> constantes = new HashMap<>();
 
         for (Instruction3DC inst : codigo) {
+
+            // --- CORRECCIÓN CRÍTICA ---
+            // Si encontramos una etiqueta, vaciamos el conocimiento de constantes.
+            // Esto evita que asumamos valores dentro de bucles.
+            if (inst.operation.equals("LABEL")) {
+                constantes.clear();
+                opt.add(inst);
+                continue;
+            }
+            // --------------------------
+
+            // Recuperar valores constantes si existen
+            Object v1 = constantes.getOrDefault(inst.operand1, parseConstante(inst.operand1));
+            Object v2 = constantes.getOrDefault(inst.operand2, parseConstante(inst.operand2));
+
             if (esOperacion(inst.operation)) {
-                Object valorOp1 = constantes.getOrDefault(inst.operand1, inst.operand1);
-                Object valorOp2 = constantes.getOrDefault(inst.operand2, inst.operand2);
-                Object parsedOp1 = parseConstante(valorOp1);
-                Object parsedOp2 = parseConstante(valorOp2);
-
-                if (esValorCalculable(parsedOp1) && esValorCalculable(parsedOp2)) {
-                    Simbolo s1 = new Simbolo(parsedOp1); 
-                    Simbolo s2 = new Simbolo(parsedOp2); 
-                    Object resultado = null;
-                    List<String> erroresFalsos = new ArrayList<>();
-                    
-                    switch (inst.operation) {
-                        case "SUMA": resultado = HelperParser.evalArit(s1, "+", s2, erroresFalsos, 0, 0); break;
-                        case "RESTA": resultado = HelperParser.evalArit(s1, "-", s2, erroresFalsos, 0, 0); break;
-                        case "MULT": resultado = HelperParser.evalArit(s1, "*", s2, erroresFalsos, 0, 0); break;
-                        case "DIV": resultado = HelperParser.evalArit(s1, "/", s2, erroresFalsos, 0, 0); break;
-                        case "MAYOR": resultado = HelperParser.evalComp(s1, ">", s2, erroresFalsos, 0, 0); break;
-                        case "MENOR": resultado = HelperParser.evalComp(s1, "<", s2, erroresFalsos, 0, 0); break;
-                        case "IGUAL_QUE": resultado = HelperParser.evalComp(s1, "==", s2, erroresFalsos, 0, 0); break;
-                        case "AND": resultado = HelperParser.evalAnd(s1, s2, erroresFalsos, 0, 0); break;
-                        case "OR": resultado = HelperParser.evalOr(s1, s2, erroresFalsos, 0, 0); break;
+                // A. Intento de Plegado (ambos son constantes)
+                if (esCalculable(v1) && esCalculable(v2)) {
+                    Object res = calcular(inst.operation, v1, v2);
+                    if (res != null) {
+                        opt.add(new Instruction3DC("ASSIGN", inst.result, res.toString()));
+                        constantes.put(inst.result, res);
+                        continue;
                     }
-
-                    if (resultado != null && erroresFalsos.isEmpty()) {
-                        System.out.println("Optimizando: " + inst + " -> " + resultado);
-                        Instruction3DC nuevaInst = new Instruction3DC("ASSIGN", inst.result, resultado.toString());
-                        codigoOptimizado.add(nuevaInst);
-                        constantes.put(inst.result, resultado);
-                    } else {
-                        codigoOptimizado.add(inst);
-                    }
-                } else {
-                    codigoOptimizado.add(inst);
                 }
-            } 
-            else if (inst.operation.equals("ASSIGN")) {
-                Object valorAsignado = constantes.getOrDefault(inst.operand1, inst.operand1);
-                Object parsedValor = parseConstante(valorAsignado);
-                
-                if (esValorCalculable(parsedValor)) {
-                    constantes.put(inst.result, parsedValor);
+
+                // B. Simplificación Algebraica (Identidades)
+                String s1 = inst.operand1;
+                String s2 = inst.operand2;
+                Instruction3DC simplificada = null;
+
+                switch (inst.operation) {
+                    case "SUMA": // x + 0 = x, 0 + x = x
+                        if (esCero(v2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s1);
+                        } else if (esCero(v1)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s2);
+                        }
+                        break;
+                    case "RESTA": // x - 0 = x, x - x = 0
+                        if (esCero(v2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s1);
+                        } else if (s1 != null && s1.equals(s2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, "0");
+                        }
+                        break;
+                    case "MULT": // x * 1 = x, x * 0 = 0
+                        if (esUno(v2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s1);
+                        } else if (esUno(v1)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s2);
+                        } else if (esCero(v1) || esCero(v2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, "0");
+                        }
+                        break;
+                    case "DIV": // x / 1 = x, 0 / x = 0
+                        if (esUno(v2)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, s1);
+                        } else if (esCero(v1)) {
+                            simplificada = new Instruction3DC("ASSIGN", inst.result, "0");
+                        }
+                        break;
+                }
+
+                if (simplificada != null) {
+                    opt.add(simplificada);
                 } else {
+                    opt.add(inst);
+                }
+
+            } else if (inst.operation.equals("ASSIGN")) {
+                if (esCalculable(v1)) {
+                    constantes.put(inst.result, v1);
+                } else {
+                    constantes.remove(inst.result); // Variable dejó de ser constante
+                }
+                opt.add(inst);
+            } else {
+                // Limpiar constantes si se redefine una variable en otra operación no manejada
+                if (inst.result != null) {
                     constantes.remove(inst.result);
                 }
-                codigoOptimizado.add(inst);
-            }
-            else {
-                codigoOptimizado.add(inst);
+                opt.add(inst);
             }
         }
-        return codigoOptimizado;
+        return opt;
     }
 
     // -------------------------------------------------------
-    // PASO 2: ELIMINACIÓN DE CÓDIGO MUERTO (NUEVO)
+    // 2. PROPAGACIÓN DE COPIAS
     // -------------------------------------------------------
-    private List<Instruction3DC> eliminarCodigoMuerto(List<Instruction3DC> codigo) {
-        // 1. Identificar qué variables se USAN en alguna parte
-        Set<String> variablesUsadas = new HashSet<>();
-        
-        for (Instruction3DC inst : codigo) {
-            // Si la instrucción usa operandos, los agregamos al set de usados
-            if (inst.operand1 != null) variablesUsadas.add(inst.operand1);
-            if (inst.operand2 != null) variablesUsadas.add(inst.operand2);
-            
-            // Caso especial: IF_GOTO usa el operando1 como condición
-            if (inst.operation.equals("IF_GOTO")) variablesUsadas.add(inst.operand1);
-            
-            // Caso especial: PRINT usa el operando1
-            if (inst.operation.equals("PRINT")) variablesUsadas.add(inst.operand1);
-        }
+    private List<Instruction3DC> propagacionCopias(List<Instruction3DC> codigo) {
+        List<Instruction3DC> opt = new ArrayList<>();
+        Map<String, String> copias = new HashMap<>(); // Map destino -> origen
 
-        // 2. Filtrar instrucciones inútiles
-        List<Instruction3DC> codigoLimpio = new ArrayList<>();
-        
         for (Instruction3DC inst : codigo) {
-            // Si es una asignación o una operación que genera un resultado (ej. T1 = ...)
-            if (inst.result != null && (esOperacion(inst.operation) || inst.operation.equals("ASSIGN") || inst.operation.equals("NOT"))) {
-                
-                // ¿Es una variable temporal (empieza con 'T' y un número)?
-                boolean esTemporal = inst.result.matches("^T\\d+$");
-                
-                // SI es temporal Y nadie lo usa -> ES CÓDIGO MUERTO -> No lo agregamos
-                if (esTemporal && !variablesUsadas.contains(inst.result)) {
-                    continue; // ¡Eliminado!
+            String op1 = copias.getOrDefault(inst.operand1, inst.operand1);
+            String op2 = copias.getOrDefault(inst.operand2, inst.operand2);
+            // Nota: No reemplazamos en 'result' porque es definición, no uso.
+
+            // Reconstruir instrucción con operandos propagados
+            Instruction3DC nueva = new Instruction3DC(inst.operation, inst.result, op1, op2);
+
+            // Manejo de redefiniciones (Invalidación)
+            if (inst.result != null) {
+                // Si la variable 'result' se redefine, ya no es copia válida de nada anterior
+                // Y nada que fuera copia de 'result' es válido ahora (aunque en 3DC T# no suelen cambiar, vars sí)
+                copias.values().removeIf(val -> val.equals(inst.result));
+                copias.remove(inst.result);
+            }
+
+            // Registrar nueva copia si es asignación simple
+            if (inst.operation.equals("ASSIGN")) {
+                copias.put(inst.result, op1);
+            } else if (inst.operation.equals("LABEL")) {
+                copias.clear(); // Reset en saltos para seguridad (contexto cambia)
+            }
+
+            opt.add(nueva);
+        }
+        return opt;
+    }
+
+    // -------------------------------------------------------
+    // 3. ELIMINACIÓN DE SUBEXPRESIONES COMUNES (CSE)
+    // -------------------------------------------------------
+    private List<Instruction3DC> eliminarSubexpresiones(List<Instruction3DC> codigo) {
+        List<Instruction3DC> opt = new ArrayList<>();
+        // Key: "OP op1 op2", Value: TempVariable
+        Map<String, String> expresiones = new HashMap<>();
+
+        for (Instruction3DC inst : codigo) {
+            if (esOperacion(inst.operation)) {
+                String key = inst.operation + " " + inst.operand1 + " " + inst.operand2;
+                // Conmutatividad para suma y mult
+                if (inst.operation.equals("SUMA") || inst.operation.equals("MULT")) {
+                    String keyComm = inst.operation + " " + inst.operand2 + " " + inst.operand1;
+                    if (expresiones.containsKey(keyComm)) {
+                        key = keyComm;
+                    }
+                }
+
+                if (expresiones.containsKey(key)) {
+                    // Encontramos subexpresión! Reemplazar por asignación del temp existente
+                    String tempExistente = expresiones.get(key);
+                    opt.add(new Instruction3DC("ASSIGN", inst.result, tempExistente));
+                } else {
+                    expresiones.put(key, inst.result);
+                    opt.add(inst);
+                }
+            } else {
+                // Si una variable cambia, invalidar expresiones que la usen
+                if (inst.result != null) {
+                    String var = inst.result;
+                    expresiones.keySet().removeIf(k -> k.contains(" " + var + " ") || k.endsWith(" " + var));
+                }
+                if (inst.operation.equals("LABEL")) {
+                    expresiones.clear(); // Reset en saltos
+                }
+                opt.add(inst);
+            }
+        }
+        return opt;
+    }
+
+    // -------------------------------------------------------
+    // 4. ELIMINACIÓN DE CÓDIGO INALCANZABLE
+    // -------------------------------------------------------
+    private List<Instruction3DC> eliminarInalcanzable(List<Instruction3DC> codigo) {
+        List<Instruction3DC> opt = new ArrayList<>();
+        boolean inalcanzable = false;
+
+        for (Instruction3DC inst : codigo) {
+            if (inst.operation.equals("LABEL")) {
+                inalcanzable = false; // Una etiqueta siempre es un punto de entrada potencial
+            }
+
+            if (!inalcanzable) {
+                opt.add(inst);
+                if (inst.operation.equals("GOTO")) {
+                    inalcanzable = true; // Después de GOTO incondicional, el código es muerto hasta prox Label
                 }
             }
-            
-            // Si no fue eliminado, lo conservamos
-            codigoLimpio.add(inst);
         }
+        return opt;
+    }
+
+    // -------------------------------------------------------
+    // 5. ELIMINACIÓN DE CÓDIGO MUERTO (Variables no usadas)
+    // -------------------------------------------------------
+    private List<Instruction3DC> eliminarCodigoMuerto(List<Instruction3DC> codigo) {
+        Set<String> usadas = new HashSet<>();
+        // Paso 1: Identificar variables usadas
+        for (Instruction3DC inst : codigo) {
+            if (inst.operand1 != null) {
+                usadas.add(inst.operand1);
+            }
+            if (inst.operand2 != null) {
+                usadas.add(inst.operand2);
+            }
+            // Casos especiales donde operand1 no es solo dato
+            if (inst.operation.equals("IF_GOTO") || inst.operation.equals("PRINT")) {
+                usadas.add(inst.operand1);
+            }
+        }
+
+        List<Instruction3DC> opt = new ArrayList<>();
+        for (Instruction3DC inst : codigo) {
+            // Si define una variable temporal (T...) y no se usa, eliminar
+            if (inst.result != null && inst.result.startsWith("T")) { // Asumiendo temporales T0, T1...
+                if (!usadas.contains(inst.result) && esOperacionOAsignacion(inst.operation)) {
+                    continue; // Eliminar
+                }
+            }
+            opt.add(inst);
+        }
+        return opt;
+    }
+
+    /*
+    // -------------------------------------------------------
+    // 5. ELIMINACIÓN DE CÓDIGO MUERTO (VERSIÓN AGRESIVA)
+    // -------------------------------------------------------
+    private List<Instruction3DC> eliminarCodigoMuerto(List<Instruction3DC> codigo) {
+        Set<String> usadas = new HashSet<>();
         
-        return codigoLimpio;
-    }
-
-    // --- Métodos de Ayuda ---
-    
-    private boolean esOperacion(String op) {
-        if (op == null) return false;
-        return op.equals("SUMA") || op.equals("RESTA") || op.equals("MULT") || 
-               op.equals("DIV") || op.equals("MAYOR") || op.equals("MENOR") ||
-               op.equals("IGUAL_QUE") || op.equals("AND") || op.equals("OR");
-    }
-
-    private Object parseConstante(Object valor) {
-        if (valor == null) return null;
-        if (valor instanceof Number || valor instanceof Boolean) return valor;
-
-        if (valor instanceof String) {
-            String str = (String) valor;
-            if (str.equals("true")) return true;
-            if (str.equals("false")) return false;
-            if (str.startsWith("\"") && str.endsWith("\"")) return str;
-            try { return Integer.parseInt(str); } catch (NumberFormatException e) {}
-            try { return Double.parseDouble(str); } catch (NumberFormatException e) {}
-            return str; 
+        // Paso 1: Identificar qué variables se LEEN/USAN
+        for (Instruction3DC inst : codigo) {
+            if (inst.operand1 != null) usadas.add(inst.operand1);
+            if (inst.operand2 != null) usadas.add(inst.operand2);
+            
+            // IF y PRINT usan el operand1
+            if (inst.operation.equals("IF_GOTO") || inst.operation.equals("PRINT")) {
+                usadas.add(inst.operand1);
+            }
         }
-        return valor;
+
+        List<Instruction3DC> opt = new ArrayList<>();
+        for (Instruction3DC inst : codigo) {
+            // Verificamos si la instrucción produce un resultado (Asignación u Operación)
+            boolean generaResultado = inst.result != null && esOperacionOAsignacion(inst.operation);
+            
+            if (generaResultado) {
+                // CORRECCIÓN: Eliminamos la restricción .startsWith("T")
+                // Si la variable resultado NO está en la lista de usadas, ADIÓS.
+                if (!usadas.contains(inst.result)) {
+                     continue; // Se elimina la instrucción
+                }
+            }
+            opt.add(inst);
+        }
+        return opt;
+    }
+     */
+    // --- UTILIDADES ---
+    private boolean esOperacion(String op) {
+        return List.of("SUMA", "RESTA", "MULT", "DIV", "AND", "OR", "MAYOR", "MENOR", "IGUAL_QUE").contains(op);
     }
 
-    private boolean esValorCalculable(Object valor) {
-        return valor instanceof Number || valor instanceof Boolean;
+    private boolean esOperacionOAsignacion(String op) {
+        return esOperacion(op) || op.equals("ASSIGN") || op.equals("NOT");
+    }
+
+    private boolean esCalculable(Object o) {
+        return o instanceof Number || o instanceof Boolean;
+    }
+
+    private boolean esCero(Object o) {
+        if (o == null) {
+            return false;
+        }
+        return o.toString().equals("0") || o.toString().equals("0.0");
+    }
+
+    private boolean esUno(Object o) {
+        if (o == null) {
+            return false;
+        }
+        return o.toString().equals("1") || o.toString().equals("1.0");
+    }
+
+    private Object parseConstante(String s) {
+        if (s == null) {
+            return null;
+        }
+        if (s.equalsIgnoreCase("true")) {
+            return true;
+        }
+        if (s.equalsIgnoreCase("false")) {
+            return false;
+        }
+        try {
+            if (s.contains(".")) {
+                return Double.valueOf(s);
+            }
+            return Integer.valueOf(s);
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
+    private Object calcular(String op, Object v1, Object v2) {
+        List<String> dummy = new ArrayList<>();
+        Simbolo s1 = new Simbolo(v1);
+        Simbolo s2 = new Simbolo(v2);
+        try {
+            switch (op) {
+                case "SUMA":
+                    return HelperParser.evalArit(s1, "+", s2, dummy, 0, 0);
+                case "RESTA":
+                    return HelperParser.evalArit(s1, "-", s2, dummy, 0, 0);
+                case "MULT":
+                    return HelperParser.evalArit(s1, "*", s2, dummy, 0, 0);
+                case "DIV":
+                    return HelperParser.evalArit(s1, "/", s2, dummy, 0, 0);
+                case "AND":
+                    return HelperParser.evalAnd(s1, s2, dummy, 0, 0);
+                case "OR":
+                    return HelperParser.evalOr(s1, s2, dummy, 0, 0);
+                case "MAYOR":
+                    return HelperParser.evalComp(s1, ">", s2, dummy, 0, 0);
+                case "MENOR":
+                    return HelperParser.evalComp(s1, "<", s2, dummy, 0, 0);
+                case "IGUAL_QUE":
+                    return HelperParser.evalComp(s1, "==", s2, dummy, 0, 0);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 }
