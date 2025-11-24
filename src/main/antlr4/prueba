@@ -1,0 +1,110 @@
+// EXPRESIONES 
+expr : logica #expr_logica
+    | comp #expr_comp 
+    | arit #expr_arit 
+    | factor 
+    ; 
+
+// Operadores lógicos (menor prioridad) 
+logica : NOT expr #not 
+    | expr AND expr #and 
+    | expr OR expr #or 
+    ; 
+
+// Operadores de comparación (mayor prioridad que los lógicos) 
+comp : expr IGUAL_QUE expr #igual_que 
+    | expr MAYOR expr #mayor 
+    | expr MENOR expr #menor 
+    ; 
+// Operadores aritméticos (mayor prioridad) 
+arit : expr SUMA expr #suma 
+    | expr RESTA expr #resta 
+    | expr MULT expr #mult 
+    | expr DIV expr #div 
+    ; 
+// ------------ OPERADORES ------------ 
+factor : '(' expr ')' #agrup 
+        | NUMERO #num 
+        | NUMERO_DEC #num_dec 
+        | CADENA #cad 
+        | VERDADERO #bool_true 
+        | FALSO #bool_false 
+        | ID #ide 
+        ;
+
+
+//ALTERNATIVA 2
+expr
+    : expr_logica
+    ;
+
+
+// Operadores lógicos
+expr_logica
+    : expr_comp ( (AND | OR) expr_comp )*
+    ;
+
+
+// Operadores de comparación
+expr_comp
+    : expr_arit ( (IGUAL_QUE | MAYOR | MENOR) expr_arit )*
+    ;
+
+// Operadores aritméticos
+expr_arit
+    : expr_term ( (SUMA | RESTA) expr_term )*
+    ;
+
+// Operadores multiplicativos
+expr_term
+    : expr_factor ( (MULT | DIV) expr_factor )*
+    ;
+
+//  Factores
+expr_factor
+    : '(' expr ')'                #agrup
+    | NOT expr_factor             #negacion
+    | NUMERO                      #num
+    | NUMERO_DEC                  #num_dec
+    | CADENA                      #cad
+    | VERDADERO                   #bool_true
+    | FALSO                       #bool_false
+    | ID                          #ide
+    ;
+
+
+ALTERNATIVA 3
+expr
+    : factor (AND | OR) expr                #exprLogica
+    | factor (IGUAL_QUE | MAYOR | MENOR) expr #exprComparacion
+    | factor (SUMA | RESTA) expr            #exprArit
+    | factor (MULT | DIV) expr              #exprTerm
+    | NOT expr                            #negacion
+    | factor                              #factorExpr
+    | '(' expr ')'                        #agrup
+    ;
+
+//  Factores 
+factor returns [Object value, String tipo]
+    : NUMERO      { 
+        $value = Integer.parseInt($NUMERO.text); 
+        $tipo = "Entero"; 
+    } #entero
+    | NUMERO_DEC  { 
+        $value = Double.parseDouble($NUMERO_DEC.text); 
+        $tipo = "Decimal"; 
+    } #decimal
+    | CADENA      { 
+        $value = $CADENA.text; 
+        $tipo = "Cadena"; 
+    } #cad
+    | VERDADERO   { 
+        $value = true; 
+        $tipo = "Booleano"; 
+    } #bool_true
+    | FALSO       { 
+        $value = false; 
+        $tipo = "Booleano"; 
+    } #bool_false
+    | variable=ID  #ide
+    ;

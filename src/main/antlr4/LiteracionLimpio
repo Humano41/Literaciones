@@ -1,0 +1,145 @@
+grammar Literaciones;
+
+
+// Agregamos los paquetes necesarios para la tabla de simbolos al parser   
+@header {
+    package com.ittepic.literaciones;
+    
+    import java.util.Map;
+    import java.util.HashMap;
+    import java.util.List;
+    import java.util.ArrayList;  
+}
+
+// Insertar codigo en la parte de atributos
+@parser::members {
+    public Map<String, Object> tablaSimbolos = new HashMap<String, Object>();
+    public List<String> listaErrores = new ArrayList<>();
+}
+
+
+// --------- REGLAS DEL PARSER (estructura) ---------
+programa : INICIO sentencia* FINAL EOF ;
+
+sentencia :     declaracion         #declara
+            |   asignacion          #asig
+            |   imprimir            #show
+            |   condicion           #cond
+            |   ciclo               #cic
+            |   repeat              #rep
+            ;
+
+// REGLAS CORREGIDAS Y LIMPIAS
+declaracion : 
+        DECLARA ID #crear 
+            | DECLARA ID ASIGNA expr #crea_asigna
+            ;
+
+asignacion : ID ASIGNA expr  #asignar
+    ;
+
+imprimir : PRINT expr     #imp
+           ;
+
+condicion :  IF expr THEN sentencia* FIN PUNTO (ELSE sentencia* FIN PUNTO)?    #if_else
+          ;
+
+ciclo : WHILE expr THEN sentencia* FIN #while
+      ;
+      
+repeat : FOR valor THEN sentencia* FIN   #for_simple
+       ;
+
+valor:
+      NUMERO    #num
+    | ID        #ident
+    ;
+
+// =============================
+// ======= EXPRESIONES =======
+// =============================
+
+// Expresión principal (nivel más alto)
+expr returns [Object value]
+    : expr_or
+    ;
+
+// Operadores lógicos (AND, OR)
+expr_or returns [Object value]
+    : a=expr_comp (op=(AND | OR) b=expr_comp)*  #exprLogica
+    ;
+
+// Comparaciones (=, <, >, etc.)
+expr_comp returns
+    : a=expr_arit (op=(IGUAL_QUE | MAYOR | MENOR) b=expr_arit)* #exprComparacion
+    ;
+
+// Suma y resta
+expr_arit returns
+    : a=expr_term (op=(SUMA | RESTA) b=expr_term)* #exprArit
+    ;
+
+// Multiplicación y división
+expr_term returns
+    : a=term (op=(MULT | DIV) b=term)* #exprTerm
+    ;
+
+// =============================
+// ======= FACTORES ==========
+// =============================
+term returns [Object value]
+    : '(' e=expr ')'           #agrup
+    | NOT e=expr               #negacion
+    | NUMERO                   #entero
+    | NUMERO_DEC               #decimal
+    | CADENA                   #cad
+    | VERDADERO                #bool_true
+    | FALSO                    #bool_false
+    | ID                       #ide
+    ;
+
+
+
+
+// --------- REGLAS DEL LÉXICO (tokens básicos) ---------
+// (El resto de tu archivo es correcto, lo incluyo para que tengas todo completo)
+INICIO      : 'INICIO' | 'COMIENZO' | 'PROLOGO' | 'APERTURA' ;
+FINAL       : 'FINAL'  | 'EPILOGO' | 'CIERRE' ;
+
+IF          : 'SI'     | 'CONDICION' | 'CUMPLE' | 'REQUISITO' ;
+ELSE        : 'SINO'   | 'CAMBIO' | 'FALLA' ;
+WHILE       : 'MIENTRAS' | 'HASTA' ;
+THEN        : 'HACER' | 'ENTONCES' ;
+FOR         : 'REPETIR' | 'CICLO' | 'BUCLE' ;
+FIN         : 'FIN' ;
+
+PRINT       : 'MOSTRAR' | 'MUESTRA' | 'ENSEÑA' | 'DICE' | 'DECIR' | 'IMPRIME' | 'IMPRIMIR' ;
+ASIGNA      : 'IGUAL' | 'VALOR' | 'ASIGNA' | 'ASIGNAR' | 'DE' | 'COMO' | 'OBTIENE' | 'TOMA' | 'ADOPTA' | 'VUELVE' | 'TRANSFORMA' | '=' ;
+DECLARA     : 'DECLARA' | 'DECLARAR' | 'CREA' | 'CREAR' | 'EXISTE' | 'NACE' | 'SURGE' | 'INTRODUCE' | 'PRESENTA' ;
+
+SUMA        : 'SUMA'| 'MAS' | 'AÑADE' | 'JUNTA' | '+';
+RESTA       : 'RESTA' | 'QUITA' | 'REDUCE' | 'MENOS' | '-';
+MULT        : 'MULTIPLICA' | 'POR' | 'CRECE' | '*' ;
+DIV         : 'ENTRE' | 'REPARTE' | 'SEPARA' | '/';
+
+AND         : 'Y' | 'ADEMAS' | 'TAMBIEN' ;
+OR          : 'O' ;
+NOT         : 'NO' | 'NEGAR' ;
+
+IGUAL_QUE   : 'COINCIDE' | 'EQUIVALE' | 'MISMO' | 'IGUAL_QUE' | '==' ;
+MAYOR       : 'MAYOR' | 'SOBREPASA' | 'ARRIBA' | 'SUPERIOR' | '>';
+MENOR       : 'MENOR' | 'INFERIOR' | 'DEBAJO' | '<';
+
+VERDADERO   : 'VERDADERO' | 'CIERTO' | 'REAL' | 'POSIBLE' ;
+FALSO       : 'FALSO' | 'IMPOSIBLE' | 'IRREAL' ;
+
+NUMERO : [0-9]+ ;
+NUMERO_DEC : [0-9]+ ('.' [0-9]+)? ;
+CADENA : '"' (~["\r\n])* '"' ;
+ID : [A-Z][a-z0-9]* ;
+
+// COMPLEMENTO : [a-z]+ -> skip;
+WS  : [ \t\r\n]+ -> skip ;
+LINE_COMMENT : '//' ~[\r\n]* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+ERROR       : . ;
