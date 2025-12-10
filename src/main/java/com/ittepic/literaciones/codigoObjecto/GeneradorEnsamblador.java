@@ -33,9 +33,9 @@ public class GeneradorEnsamblador {
         stringLiterals.clear();
         variablesTipoString.clear();
 
-        // ---------------------------------------------------------
+
+        
         // 1. CABECERA Y FUNCIONES EXTERNAS
-        // ---------------------------------------------------------
         textSection.append("global _main\n");
         textSection.append("extern _printf\n");
         textSection.append("extern _sprintf\n");
@@ -48,9 +48,9 @@ public class GeneradorEnsamblador {
         textSection.append("    push ebp\n");
         textSection.append("    mov ebp, esp\n\n");
 
-        // ---------------------------------------------------------
+
         // 2. SECCIÓN DATA (Constantes y Formatos)
-        // ---------------------------------------------------------
+
         dataSection.append("section .data\n");
         dataSection.append("    fmt_int db \"%d\", 10, 0\n");
         dataSection.append("    fmt_str db \"%s\", 10, 0\n");
@@ -62,22 +62,22 @@ public class GeneradorEnsamblador {
         dataSection.append("    cmd_speak_str db \"powershell -c (New-Object -ComObject SAPI.SpVoice).Speak('%s') > NUL\", 0\n");
         dataSection.append("    cmd_speak_int db \"powershell -c (New-Object -ComObject SAPI.SpVoice).Speak('%d') > NUL\", 0\n");
 
-        // ---------------------------------------------------------
+
+        
         // 3. SECCIÓN BSS (Variables y Buffers)
-        // ---------------------------------------------------------
         bssSection.append("section .bss\n");
         bssSection.append("    buffer resb 1024\n"); 
 
-        // ---------------------------------------------------------
-        // 4. TRADUCCIÓN DE INSTRUCCIONES
-        // ---------------------------------------------------------
+
         
-        // PRIMERA PASADA: Registrar variables
+        // 4. TRADUCCIÓN DE INSTRUCCIONES
+        
+        // 1: Registrar variables
         for(Instruction3DC inst : instrucciones) {
             registrarVariable(inst.result, bssSection);
         }
 
-        // SEGUNDA PASADA: Generar código
+        // 2: Generar código
         for (Instruction3DC inst : instrucciones) {
             textSection.append("    ; ").append(inst.toString()).append("\n");
 

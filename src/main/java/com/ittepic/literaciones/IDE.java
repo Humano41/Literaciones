@@ -44,6 +44,8 @@ public class IDE extends javax.swing.JFrame {
     private Coloreador coloreador;
     private Timer coloreadoTimer; // Objeto Timer
     private final int DELAY_MS = 250; // 250 milisegundos de espera
+    
+    private String Ruta, Name;
 
     /**
      * Creates new form Menu
@@ -690,12 +692,8 @@ public class IDE extends javax.swing.JFrame {
                 bat.write("nasm -f win32 historia.asm -o historia.o\n");
                 bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en NASM & pause & exit )\n\n");
 
-                // 2. ENLAZAR: Comando robusto para MinGW antiguo
-                // Entry point flag y librería C son obligatorios para este error
+                // 2. ENLAZAR: 
                 jtaOutput.append("[2/3] GCC: Creando ejecutable (a.exe)...\n");
-
-                // Esta línea es la clave: le dice a GCC que use el objeto, vincule la librería C 
-                // (-lmsvcrt) y que el punto de inicio es _main.
                 bat.write("gcc historia.o -lmsvcrt -Wl,--entry=_main\n");
 
                 bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en GCC durante el enlazado & pause & exit )\n");
@@ -712,7 +710,6 @@ public class IDE extends javax.swing.JFrame {
                 bat.write("echo ===============================================\n");
                 bat.write("echo Fin del programa.\n");
                 bat.write("pause\n");
-                bat.write("del historia.o\n");
             }
 
             Runtime.getRuntime().exec("cmd /c start build_run.bat");
@@ -903,6 +900,7 @@ public class IDE extends javax.swing.JFrame {
         int opcion = fileChooser.showOpenDialog(this);
         if (opcion == JFileChooser.APPROVE_OPTION) {
             File archivo = fileChooser.getSelectedFile();
+            System.out.println(archivo.getParent());
             try (BufferedReader br = new BufferedReader(new FileReader(archivo))) {
                 StringBuilder texto = new StringBuilder();
                 String linea;
