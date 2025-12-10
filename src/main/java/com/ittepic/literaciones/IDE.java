@@ -660,56 +660,7 @@ public class IDE extends javax.swing.JFrame {
             System.out.println("------------------------------------------");
 
             // GENERACION DE ENSAMBLADOR Y ARCHIVO EXE
-            try {
-                System.out.println("--- GENERANDO ENSAMBLADOR (NASM) ---");
-
-                GeneradorEnsamblador genAsm = new GeneradorEnsamblador();
-                String nombreAsm = "historia.asm";
-                genAsm.generarArchivo(codigoOptimizado, nombreAsm);
-
-                jtaOutput.append("\n\n[INFO] Archivo ensamblador generado.");
-
-                // Creamos el script .bat con la ESTRATEGIA SEGURA
-                try (FileWriter bat = new FileWriter("build_run.bat")) {
-                    bat.write("@echo off\n");
-                    bat.write("title Compilando Historia\n");
-                    bat.write("cls\n");
-
-                    // ENSAMBLAR
-                    bat.write("echo [1/3] NASM: Generando codigo objeto...\n");
-                    bat.write("nasm -f win32 historia.asm -o historia.obj\n");
-                    bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en NASM & pause & exit )\n\n");
-
-                    //ENLAZAR
-                    bat.write("echo [2/3] GCC: Creando ejecutable (Estrategia Segura)...\n");
-                    // Simplemente llamamos a gcc con el objeto y el flag de 32 bits. 
-                    // Esto creará un archivo llamado 'a.exe' por defecto.
-                    bat.write("gcc historia.obj -m32\n");
-                    bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en GCC & pause & exit )\n");
-
-                    // Renombramos a.exe a historia.exe (borrando el anterior si existe)
-                    bat.write("if exist historia.exe del historia.exe\n");
-                    bat.write("ren a.exe historia.exe\n\n");
-
-                    // 4. EJECUTAR
-                    bat.write("echo [3/3] EJECUTANDO HISTORIA:\n");
-                    bat.write("echo ===============================================\n");
-                    bat.write("historia.exe\n");
-                    bat.write("echo ===============================================\n");
-                    bat.write("echo Fin del programa.\n");
-                    bat.write("pause\n");
-
-                    // Limpieza
-                    bat.write("del historia.obj\n");
-                }
-
-                // Ejecutar el script
-                Runtime.getRuntime().exec("cmd /c start build_run.bat");
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                jtaOutput.append("\n[ERROR] Excepcion Java: " + e.getMessage());
-            }
+            codigoObjeto(codigoOptimizado);
 
         } catch (Exception e) {
             System.err.println("Error grave durante la fase de optimización: " + e.getMessage());
@@ -718,6 +669,59 @@ public class IDE extends javax.swing.JFrame {
 
 
     }//GEN-LAST:event_btnCompilarActionPerformed
+
+    private void codigoObjeto(List<Instruction3DC> codigoOptimizado) {
+        try {
+            System.out.println("--- GENERANDO ENSAMBLADOR (NASM) ---");
+
+            GeneradorEnsamblador genAsm = new GeneradorEnsamblador();
+            String nombreAsm = "historia.asm";
+            genAsm.generarArchivo(codigoOptimizado, nombreAsm);
+
+            jtaOutput.append("\n\n[INFO] Archivo ensamblador generado.");
+
+            try (FileWriter bat = new FileWriter("build_run.bat")) {
+                bat.write("@echo off\n");
+                bat.write("title Compilando Historia\n");
+                bat.write("cls\n");
+
+                // 1. ENSAMBLAR
+                jtaOutput.append("[1/3] NASM: Generando codigo objeto (.o)...\n");
+                bat.write("nasm -f win32 historia.asm -o historia.o\n");
+                bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en NASM & pause & exit )\n\n");
+
+                // 2. ENLAZAR: Comando robusto para MinGW antiguo
+                // Entry point flag y librería C son obligatorios para este error
+                jtaOutput.append("[2/3] GCC: Creando ejecutable (a.exe)...\n");
+
+                // Esta línea es la clave: le dice a GCC que use el objeto, vincule la librería C 
+                // (-lmsvcrt) y que el punto de inicio es _main.
+                bat.write("gcc historia.o -lmsvcrt -Wl,--entry=_main\n");
+
+                bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en GCC durante el enlazado & pause & exit )\n");
+
+                // Renombrar a.exe a historia.exe (por el método seguro)
+                bat.write("if not exist a.exe ( echo [ERROR FATAL] GCC no pudo generar a.exe. & pause & exit )\n");
+                bat.write("if exist historia.exe del historia.exe\n");
+                bat.write("ren a.exe historia.exe\n\n");
+
+                // 3. EJECUTAR
+                jtaOutput.append("[3/3]EJECUTANDO HISTORIA:\n");
+                bat.write("echo ===============================================\n");
+                bat.write("historia.exe\n");
+                bat.write("echo ===============================================\n");
+                bat.write("echo Fin del programa.\n");
+                bat.write("pause\n");
+                bat.write("del historia.o\n");
+            }
+
+            Runtime.getRuntime().exec("cmd /c start build_run.bat");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            jtaOutput.append("\n[ERROR] Excepcion Java: " + e.getMessage());
+        }
+    }
 
     private void mostrarTablaSimbolos() {
 
