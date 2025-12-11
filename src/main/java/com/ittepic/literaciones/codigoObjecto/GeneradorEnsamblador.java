@@ -19,7 +19,7 @@ public class GeneradorEnsamblador {
     private Set<String> variablesDeclaradas = new HashSet<>();
     // Mapa para reutilizar strings literales y no repetirlos en .data
     private Map<String, String> stringLiterals = new HashMap<>();
-    
+
     // Rastrear qué variables contienen Strings
     private Set<String> variablesTipoString = new HashSet<>();
 
@@ -33,47 +33,38 @@ public class GeneradorEnsamblador {
         stringLiterals.clear();
         variablesTipoString.clear();
 
-
-        
         // 1. CABECERA Y FUNCIONES EXTERNAS
         textSection.append("global _main\n");
-        textSection.append("extern _printf\n");
-        textSection.append("extern _sprintf\n");
-        textSection.append("extern _system\n");
+        textSection.append("extern printf\n");
+        textSection.append("extern sprintf\n");
+        textSection.append("extern system\n");
         textSection.append("extern _exit\n");
-        textSection.append("extern _strdup\n\n"); 
+        textSection.append("extern _strdup\n\n");
 
         textSection.append("section .text\n");
         textSection.append("_main:\n");
         textSection.append("    push ebp\n");
         textSection.append("    mov ebp, esp\n\n");
 
-
         // 2. SECCIÓN DATA (Constantes y Formatos)
-
         dataSection.append("section .data\n");
         dataSection.append("    fmt_int db \"%d\", 10, 0\n");
         dataSection.append("    fmt_str db \"%s\", 10, 0\n");
         dataSection.append("    fmt_str_str db \"%s%s\", 0\n");
         dataSection.append("    fmt_str_int db \"%s%d\", 0\n");
         dataSection.append("    fmt_int_str db \"%d%s\", 0\n");
-        
+
         // CORRECCIÓN AQUÍ: Usamos "> NUL" que es compatible con cmd.exe
         dataSection.append("    cmd_speak_str db \"powershell -c (New-Object -ComObject SAPI.SpVoice).Speak('%s') > NUL\", 0\n");
         dataSection.append("    cmd_speak_int db \"powershell -c (New-Object -ComObject SAPI.SpVoice).Speak('%d') > NUL\", 0\n");
 
-
-        
         // 3. SECCIÓN BSS (Variables y Buffers)
         bssSection.append("section .bss\n");
-        bssSection.append("    buffer resb 1024\n"); 
+        bssSection.append("    buffer resb 1024\n");
 
-
-        
         // 4. TRADUCCIÓN DE INSTRUCCIONES
-        
         // 1: Registrar variables
-        for(Instruction3DC inst : instrucciones) {
+        for (Instruction3DC inst : instrucciones) {
             registrarVariable(inst.result, bssSection);
         }
 
@@ -84,16 +75,16 @@ public class GeneradorEnsamblador {
             switch (inst.operation) {
                 case "ASSIGN":
                     if (esTexto(inst.operand1)) {
-                        variablesTipoString.add(inst.result); 
+                        variablesTipoString.add(inst.result);
                         String val = procesarOperando(inst.operand1, dataSection);
                         if (inst.operand1.startsWith("\"")) {
-                             textSection.append("    mov dword [").append(inst.result).append("], ").append(val).append("\n");
+                            textSection.append("    mov dword [").append(inst.result).append("], ").append(val).append("\n");
                         } else {
-                             textSection.append("    mov eax, ").append(val).append("\n");
-                             textSection.append("    mov [").append(inst.result).append("], eax\n");
+                            textSection.append("    mov eax, ").append(val).append("\n");
+                            textSection.append("    mov [").append(inst.result).append("], eax\n");
                         }
                     } else {
-                        variablesTipoString.remove(inst.result); 
+                        variablesTipoString.remove(inst.result);
                         String val = procesarOperando(inst.operand1, dataSection);
                         textSection.append("    mov eax, ").append(val).append("\n");
                         textSection.append("    mov [").append(inst.result).append("], eax\n");
@@ -117,13 +108,17 @@ public class GeneradorEnsamblador {
                 case "DIV":
                     variablesTipoString.remove(inst.result);
                     String opCode = "";
-                    if(inst.operation.equals("RESTA")) opCode = "sub";
-                    if(inst.operation.equals("MULT")) opCode = "imul";
-                    
+                    if (inst.operation.equals("RESTA")) {
+                        opCode = "sub";
+                    }
+                    if (inst.operation.equals("MULT")) {
+                        opCode = "imul";
+                    }
+
                     if (inst.operation.equals("DIV")) {
                         textSection.append("    mov eax, ").append(procesarOperando(inst.operand1, dataSection)).append("\n");
                         textSection.append("    mov ecx, ").append(procesarOperando(inst.operand2, dataSection)).append("\n");
-                        textSection.append("    cdq\n"); 
+                        textSection.append("    cdq\n");
                         textSection.append("    idiv ecx\n");
                         textSection.append("    mov [").append(inst.result).append("], eax\n");
                     } else {
@@ -151,10 +146,16 @@ public class GeneradorEnsamblador {
                     generarPrint(inst.operand1, textSection, dataSection);
                     break;
 
-                case "MAYOR":     generarComp("setg", inst, textSection, dataSection); break;
-                case "MENOR":     generarComp("setl", inst, textSection, dataSection); break;
-                case "IGUAL_QUE": generarComp("sete", inst, textSection, dataSection); break;
-                
+                case "MAYOR":
+                    generarComp("setg", inst, textSection, dataSection);
+                    break;
+                case "MENOR":
+                    generarComp("setl", inst, textSection, dataSection);
+                    break;
+                case "IGUAL_QUE":
+                    generarComp("sete", inst, textSection, dataSection);
+                    break;
+
                 case "AND":
                     textSection.append("    mov eax, ").append(procesarOperando(inst.operand1, dataSection)).append("\n");
                     textSection.append("    and eax, ").append(procesarOperando(inst.operand2, dataSection)).append("\n");
@@ -165,7 +166,7 @@ public class GeneradorEnsamblador {
                     textSection.append("    or eax, ").append(procesarOperando(inst.operand2, dataSection)).append("\n");
                     textSection.append("    mov [").append(inst.result).append("], eax\n");
                     break;
-                
+
                 case "NOT":
                     textSection.append("    mov eax, ").append(procesarOperando(inst.operand1, dataSection)).append("\n");
                     textSection.append("    cmp eax, 0\n");
@@ -191,21 +192,24 @@ public class GeneradorEnsamblador {
     }
 
     // --- MÉTODOS AUXILIARES ---
-
     private void registrarVariable(String var, StringBuilder bss) {
         if (var != null && !var.matches("-?\\d+") && !var.startsWith("\"") && !var.startsWith("L") && !variablesDeclaradas.contains(var)) {
             bss.append("    ").append(var).append(" resd 1\n");
             variablesDeclaradas.add(var);
         }
     }
-    
+
     private boolean esTexto(String op) {
-        if (op == null) return false;
+        if (op == null) {
+            return false;
+        }
         return op.startsWith("\"") || variablesTipoString.contains(op);
     }
 
     private String procesarOperando(String op, StringBuilder data) {
-        if (op == null) return "0";
+        if (op == null) {
+            return "0";
+        }
 
         if (op.startsWith("\"")) {
             if (stringLiterals.containsKey(op)) {
@@ -214,12 +218,18 @@ public class GeneradorEnsamblador {
             String label = "str_" + Math.abs(op.hashCode()) + "_" + stringLiterals.size();
             data.append("    ").append(label).append(" db ").append(op).append(", 0\n");
             stringLiterals.put(op, label);
-            return label; 
+            return label;
         }
 
-        if (op.matches("-?\\d+")) return op;
-        if (op.equalsIgnoreCase("true") || op.equalsIgnoreCase("VERDADERO")) return "1";
-        if (op.equalsIgnoreCase("false") || op.equalsIgnoreCase("FALSO")) return "0";
+        if (op.matches("-?\\d+")) {
+            return op;
+        }
+        if (op.equalsIgnoreCase("true") || op.equalsIgnoreCase("VERDADERO")) {
+            return "1";
+        }
+        if (op.equalsIgnoreCase("false") || op.equalsIgnoreCase("FALSO")) {
+            return "0";
+        }
 
         return "[" + op + "]";
     }
@@ -236,30 +246,40 @@ public class GeneradorEnsamblador {
     private void generarConcatenacion(Instruction3DC inst, StringBuilder text, StringBuilder data) {
         String op1Val = procesarOperando(inst.operand1, data);
         String op2Val = procesarOperando(inst.operand2, data);
-        
+
         boolean op1Texto = esTexto(inst.operand1);
         boolean op2Texto = esTexto(inst.operand2);
-        
+
         String fmt;
-        if (op1Texto && op2Texto) fmt = "fmt_str_str";
-        else if (op1Texto && !op2Texto) fmt = "fmt_str_int";
-        else fmt = "fmt_int_str";
+        if (op1Texto && op2Texto) {
+            fmt = "fmt_str_str";
+        } else if (op1Texto && !op2Texto) {
+            fmt = "fmt_str_int";
+        } else {
+            fmt = "fmt_int_str";
+        }
 
         text.append("    ; -- Concat --\n");
-        
-        if (op2Texto) text.append("    push ").append(op2Val).append("\n"); 
-        else text.append("    push dword ").append(op2Val).append("\n"); 
 
-        if (op1Texto) text.append("    push ").append(op1Val).append("\n");
-        else text.append("    push dword ").append(op1Val).append("\n");
+        if (op2Texto) {
+            text.append("    push ").append(op2Val).append("\n");
+        } else {
+            text.append("    push dword ").append(op2Val).append("\n");
+        }
+
+        if (op1Texto) {
+            text.append("    push ").append(op1Val).append("\n");
+        } else {
+            text.append("    push dword ").append(op1Val).append("\n");
+        }
 
         text.append("    push ").append(fmt).append("\n");
         text.append("    push buffer\n");
-        text.append("    call _sprintf\n");
-        text.append("    add esp, 16\n"); 
+        text.append("    call sprintf\n");
+        text.append("    add esp, 16\n");
 
         text.append("    push buffer\n");
-        text.append("    call _strdup\n"); 
+        text.append("    call _strdup\n");
         text.append("    add esp, 4\n");
         text.append("    mov [").append(inst.result).append("], eax\n");
     }
@@ -274,28 +294,28 @@ public class GeneradorEnsamblador {
             text.append("    push ").append(val).append("\n");
             text.append("    push fmt_str\n");
         } else {
-             text.append("    push dword ").append(val).append("\n");
-             text.append("    push fmt_int\n"); 
+            text.append("    push dword ").append(val).append("\n");
+            text.append("    push fmt_int\n");
         }
-        text.append("    call _printf\n");
+        text.append("    call printf\n");
         text.append("    add esp, 8\n");
 
         // 2. NARRAR CON POWERSHELL
         text.append("    ; Narrar con PowerShell\n");
-        
+
         if (esTxt) {
-             text.append("    push ").append(val).append("\n");
-             text.append("    push cmd_speak_str\n");
+            text.append("    push ").append(val).append("\n");
+            text.append("    push cmd_speak_str\n");
         } else {
-             text.append("    push dword ").append(val).append("\n");
-             text.append("    push cmd_speak_int\n");
+            text.append("    push dword ").append(val).append("\n");
+            text.append("    push cmd_speak_int\n");
         }
         text.append("    push buffer\n");
-        text.append("    call _sprintf\n");
-        text.append("    add esp, 12\n"); 
-        
+        text.append("    call sprintf\n");
+        text.append("    add esp, 12\n");
+
         text.append("    push buffer\n");
-        text.append("    call _system\n");
+        text.append("    call system\n");
         text.append("    add esp, 4\n");
     }
 }

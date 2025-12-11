@@ -44,7 +44,7 @@ public class IDE extends javax.swing.JFrame {
     private Coloreador coloreador;
     private Timer coloreadoTimer; // Objeto Timer
     private final int DELAY_MS = 250; // 250 milisegundos de espera
-    
+
     private String Ruta, Name;
 
     /**
@@ -689,30 +689,30 @@ public class IDE extends javax.swing.JFrame {
 
                 // 1. ENSAMBLAR
                 jtaOutput.append("[1/3] NASM: Generando codigo objeto (.o)...\n");
-                bat.write("nasm -f win32 historia.asm -o historia.o\n");
+
+                bat.write("\"herramientas\\nasm.exe\" -f win32 historia.asm -o historia.obj\n");
                 bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en NASM & pause & exit )\n\n");
 
-                // 2. ENLAZAR: 
-                jtaOutput.append("[2/3] GCC: Creando ejecutable (a.exe)...\n");
-                bat.write("gcc historia.o -lmsvcrt -Wl,--entry=_main\n");
+                // 2. ENLAZAR
+                jtaOutput.append("[2/3] GoLink: Creando ejecutable (.exe)...\n");
 
-                bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en GCC durante el enlazado & pause & exit )\n");
+                bat.write("\"herramientas\\golink.exe\" /console /entry _main historia.obj msvcrt.dll kernel32.dll\n");
 
-                // Renombrar a.exe a historia.exe (por el método seguro)
-                bat.write("if not exist a.exe ( echo [ERROR FATAL] GCC no pudo generar a.exe. & pause & exit )\n");
-                bat.write("if exist historia.exe del historia.exe\n");
-                bat.write("ren a.exe historia.exe\n\n");
+                bat.write("if %errorlevel% neq 0 ( echo [ERROR] Fallo en GoLink & pause & exit )\n");
 
                 // 3. EJECUTAR
-                jtaOutput.append("[3/3]EJECUTANDO HISTORIA:\n");
+                jtaOutput.append("[3/3] EJECUTANDO HISTORIA:\n");
                 bat.write("echo ===============================================\n");
                 bat.write("historia.exe\n");
                 bat.write("echo ===============================================\n");
                 bat.write("echo Fin del programa.\n");
                 bat.write("pause\n");
-            }
 
-            Runtime.getRuntime().exec("cmd /c start build_run.bat");
+                
+                bat.write("del historia.obj\n");
+
+                Runtime.getRuntime().exec("cmd /c start \"Ejecución de Código\" build_run.bat");
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
